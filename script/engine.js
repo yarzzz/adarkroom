@@ -279,11 +279,20 @@
           Engine._lastNotify = Date.now();
         }
         localStorage.gameState = JSON.stringify(State);
+        
+        // Check if we should upload the save to server (every 10 minutes)
+        const TEN_MINUTES = 10 * 60 * 1000; // 10 minutes in milliseconds
+        if(typeof Engine._lastUpload == 'undefined' || Date.now() - Engine._lastUpload > TEN_MINUTES) {
+          Engine._lastUpload = Date.now();
+          Engine.uploadSave();
+        }
       }
     },
 
     loadGame: function() {
+      Engine._lastUpload = Date.now();
       try {
+        // Engine.downloadSave();
         var savedState = JSON.parse(localStorage.gameState);
         if(savedState) {
           State = savedState;
@@ -297,6 +306,60 @@
       }
     },
 
+    // 上传存档到服务器
+    uploadSave: function() {
+      Engine.saveGame();
+      const data = localStorage.gameState;
+      fetch("/kv-put", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: 'gameState', value: data })
+      })
+      .then(response => {
+        if(response.ok) {
+          Notifications.notify(null, _('存档已上传到服务器'));
+        } else {
+          Notifications.notify(null, _('上传存档失败'));
+        }
+      })
+      .catch(error => {
+        Notifications.notify(null, _('上传存档失败: ') + error.message);
+      });
+    },
+    
+    // 从服务器下载存档
+    downloadSave: function() {
+      fetch(`/kv-get?key=${encodeURIComponent("gameState")}`)
+      .then(response => {
+        if(!response.ok) {
+          throw new Error('下载存档失败');
+        }
+        return response.text();
+      })
+      .then(data => {
+        if(data) {
+          console.log('localStorage inner:', localStorage);
+          Notifications.notify(null, _('存档已从服务器下载'));
+          localStorage.gameState = data;
+          location.reload();
+        } else {
+          Notifications.notify(null, _('服务器上没有存档'));
+        }
+      })
+      .catch(error => {
+        Notifications.notify(null, _('下载存档失败: ') + error.message);
+      });
+      sleepSync(3000);
+      console.log('localStorage:', localStorage);
+    },
+  
+    sleepSync: function(ms) {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        // 空循环，阻塞线程
+      }
+    },
+    
     exportImport: function() {
       Events.startEvent({
         title: _('Export / Import'),
@@ -314,6 +377,16 @@
               'import': {
                 text: _('import'),
                 nextScene: {1: 'confirm'}
+              },
+              'upload': {
+                text: _('上传存档'),
+                nextScene: 'end',
+                onChoose: Engine.uploadSave
+              },
+              'download': {
+                text: _('下载存档'),
+                nextScene: 'end',
+                onChoose: Engine.downloadSave
               },
               'cancel': {
                 text: _('cancel'),
