@@ -7,7 +7,7 @@
 Events.Marketing = [{
   /* Play Penrose! */
   title: _('Penrose'),
-  isAvailable: () => !$SM.get('marketing.penrose'),
+  isAvailable: false, // () => !$SM.get('marketing.penrose'),
   scenes: {
     'start': {
       text: [
